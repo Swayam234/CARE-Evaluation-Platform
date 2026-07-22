@@ -1,0 +1,31 @@
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+
+# Python Bytecode & Caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Databases & Local Data
+*.db
+*.sqlite
+*.sqlite3
+care_evaluator.db
+
+# Environment & Secrets
+.env
+.env.local
+!.env.example
+
+# Logs & Export Artifacts
+*.log
+pdf_reports/
+exports/

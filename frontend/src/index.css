@@ -1,0 +1,193 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-bg-primary text-slate-100 font-sans antialiased;
+    background: linear-gradient(135deg, #0A0F1E 0%, #0D1529 50%, #0A0F1E 100%);
+    min-height: 100vh;
+  }
+
+  * {
+    @apply border-bg-border;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-bg-secondary;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-bg-hover rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-500;
+  }
+}
+
+@layer components {
+  /* ── Card ─────────────────────────────────────────────────────────────────── */
+  .card {
+    @apply bg-bg-card border border-bg-border rounded-xl shadow-card;
+  }
+
+  .card-glass {
+    background: rgba(30, 41, 59, 0.7);
+    backdrop-filter: blur(12px);
+    @apply border border-bg-border rounded-xl shadow-card;
+  }
+
+  /* ── Buttons ──────────────────────────────────────────────────────────────── */
+  .btn-primary {
+    @apply inline-flex items-center gap-2 px-4 py-2 bg-care-c hover:bg-care-c-light
+           text-white font-medium rounded-lg transition-all duration-200
+           hover:shadow-glow hover:-translate-y-0.5 active:translate-y-0
+           focus:outline-none focus:ring-2 focus:ring-care-c focus:ring-offset-2 focus:ring-offset-bg-primary;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center gap-2 px-4 py-2 bg-bg-hover hover:bg-slate-600
+           text-slate-200 font-medium rounded-lg border border-bg-border
+           transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0
+           focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 focus:ring-offset-bg-primary;
+  }
+
+  .btn-danger {
+    @apply inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500
+           text-white font-medium rounded-lg transition-all duration-200
+           hover:-translate-y-0.5 active:translate-y-0;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center gap-2 px-3 py-2 text-slate-400 hover:text-slate-100
+           hover:bg-bg-hover rounded-lg transition-all duration-200;
+  }
+
+  /* ── Form Inputs ──────────────────────────────────────────────────────────── */
+  .input {
+    @apply w-full bg-bg-secondary border border-bg-border rounded-lg px-3 py-2.5
+           text-slate-100 placeholder-slate-500
+           focus:outline-none focus:ring-2 focus:ring-care-c focus:border-transparent
+           transition-all duration-200;
+  }
+
+  .input-error {
+    @apply border-red-500 focus:ring-red-500;
+  }
+
+  .label {
+    @apply block text-sm font-medium text-slate-300 mb-1.5;
+  }
+
+  /* ── Badges ───────────────────────────────────────────────────────────────── */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold;
+  }
+
+  .badge-production {
+    @apply badge bg-emerald-900/60 text-emerald-300 border border-emerald-700/50;
+  }
+  .badge-pilot {
+    @apply badge bg-blue-900/60 text-blue-300 border border-blue-700/50;
+  }
+  .badge-improve {
+    @apply badge bg-amber-900/60 text-amber-300 border border-amber-700/50;
+  }
+  .badge-not-recommended {
+    @apply badge bg-red-900/60 text-red-300 border border-red-700/50;
+  }
+
+  /* ── Severity badges ──────────────────────────────────────────────────────── */
+  .badge-critical {
+    @apply badge bg-red-900/60 text-red-300 border border-red-700/50;
+  }
+  .badge-high {
+    @apply badge bg-orange-900/60 text-orange-300 border border-orange-700/50;
+  }
+  .badge-medium {
+    @apply badge bg-yellow-900/60 text-yellow-300 border border-yellow-700/50;
+  }
+  .badge-low {
+    @apply badge bg-slate-700/60 text-slate-300 border border-slate-600/50;
+  }
+
+  /* ── Tables ───────────────────────────────────────────────────────────────── */
+  .table-wrapper {
+    @apply overflow-x-auto rounded-xl border border-bg-border;
+  }
+
+  .table {
+    @apply w-full text-sm text-left;
+  }
+
+  .table th {
+    @apply px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider
+           bg-bg-secondary border-b border-bg-border;
+  }
+
+  .table td {
+    @apply px-4 py-3 border-b border-bg-border/50 text-slate-300;
+  }
+
+  .table tbody tr {
+    @apply hover:bg-bg-hover transition-colors duration-150;
+  }
+
+  /* ── Progress Bar ─────────────────────────────────────────────────────────── */
+  .progress-bar {
+    @apply h-2 bg-bg-secondary rounded-full overflow-hidden;
+  }
+
+  .progress-fill {
+    @apply h-full rounded-full transition-all duration-700 ease-out;
+  }
+
+  /* ── Section header ───────────────────────────────────────────────────────── */
+  .section-header {
+    @apply flex items-center gap-3 mb-6;
+  }
+
+  .section-title {
+    @apply text-xl font-bold text-slate-100;
+  }
+
+  /* ── Loading skeleton ─────────────────────────────────────────────────────── */
+  .skeleton {
+    @apply animate-pulse bg-bg-hover rounded-lg;
+  }
+}
+
+/* ── Custom animations ─────────────────────────────────────────────────────── */
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-count-up {
+  animation: countUp 0.6s ease-out forwards;
+}
+
+/* ── Gauge animation ───────────────────────────────────────────────────────── */
+.gauge-circle {
+  transition: stroke-dashoffset 1.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Recharts customization ────────────────────────────────────────────────── */
+.recharts-tooltip-wrapper .recharts-default-tooltip {
+  background: #1E293B !important;
+  border: 1px solid #2D3748 !important;
+  border-radius: 8px !important;
+  color: #e2e8f0 !important;
+}
+
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+  stroke: #2D3748 !important;
+}
+
+.recharts-text {
+  fill: #94a3b8 !important;
+}
