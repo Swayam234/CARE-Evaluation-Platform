@@ -7,7 +7,9 @@ import Sidebar from './Sidebar';
 
 const PAGE_TITLES: Record<string, string> = {
   '/': 'Dashboard',
-  '/evaluate': 'New Evaluation',
+  '/evaluate': 'Manual Evaluation',
+  '/automated-evaluation': 'Automated Evaluation',
+  '/evaluation-runs': 'Evaluation Runs',
   '/history': 'Evaluation History',
   '/comparison': 'Agent Comparison',
   '/analytics': 'Analytics',

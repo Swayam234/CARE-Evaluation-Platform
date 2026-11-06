@@ -209,8 +209,6 @@ const Analytics: React.FC = () => {
               innerRadius={55}
               outerRadius={85}
               dataKey="value"
-              activeIndex={activePieIdx}
-              activeShape={renderActiveShape}
               onMouseEnter={(_, index) => setActivePieIdx(index)}
               onMouseLeave={() => setActivePieIdx(undefined)}
             >

@@ -16,6 +16,27 @@ Design notes:
 from typing import Optional, Dict, Any
 from app.models.evaluation import Evaluation
 from app.schemas.evaluation import EvaluationCreate, WeightConfigBase
+try:
+    from opentelemetry import trace
+    from opentelemetry.trace import Status, StatusCode
+    tracer = trace.get_tracer(__name__)
+except ImportError:
+    import contextlib
+    class DummySpan:
+        def set_attribute(self, *a, **kw): pass
+        def set_status(self, *a, **kw): pass
+        def record_exception(self, *a, **kw): pass
+        def add_event(self, *a, **kw): pass
+    class DummyTracer:
+        @contextlib.contextmanager
+        def start_as_current_span(self, name, *args, **kwargs):
+            yield DummySpan()
+    tracer = DummyTracer()
+    class Status:
+        def __init__(self, *a, **kw): pass
+    class StatusCode:
+        ERROR = "ERROR"
+        OK = "OK"
 
 
 # ── Reference baselines for raw-unit KPIs ────────────────────────────────────
@@ -244,21 +265,49 @@ def get_deployment_recommendation(care_score: Optional[float]) -> str:
 
 
 def run_scoring(data: EvaluationCreate, weights: WeightConfigBase) -> Dict[str, Any]:
-    """
-    End-to-end scoring pipeline.
-    Returns a dict with kpi_scores, dimension scores, care_score, recommendation.
-    """
-    kpi_scores = normalize_kpis(data)
-    score_c, score_a, score_r, score_e = compute_dimension_scores(kpi_scores)
-    care_score = compute_care_score(score_c, score_a, score_r, score_e, weights)
-    recommendation = get_deployment_recommendation(care_score)
 
-    return {
-        "kpi_scores": kpi_scores,
-        "score_c": score_c,
-        "score_a": score_a,
-        "score_r": score_r,
-        "score_e": score_e,
-        "care_score": care_score,
-        "recommendation": recommendation,
-    }
+    with tracer.start_as_current_span("compute_scores") as span:
+
+        try:
+            span.add_event("Starting CARE score calculation")
+
+            kpi_scores = normalize_kpis(data)
+
+            score_c, score_a, score_r, score_e = compute_dimension_scores(kpi_scores)
+
+            care_score = compute_care_score(
+                score_c,
+                score_a,
+                score_r,
+                score_e,
+                weights,
+            )
+
+            recommendation = get_deployment_recommendation(care_score)
+
+            # Store important values in Arize
+            span.set_attribute("care.computational", score_c or 0)
+            span.set_attribute("care.accuracy", score_a or 0)
+            span.set_attribute("care.reliability", score_r or 0)
+            span.set_attribute("care.economics", score_e or 0)
+            span.set_attribute("care.final_score", care_score or 0)
+            span.set_attribute("care.recommendation", recommendation)
+
+            span.add_event("CARE score calculated")
+
+            span.set_status(Status(StatusCode.OK))
+
+            return {
+                "kpi_scores": kpi_scores,
+                "score_c": score_c,
+                "score_a": score_a,
+                "score_r": score_r,
+                "score_e": score_e,
+                "care_score": care_score,
+                "recommendation": recommendation,
+            }
+
+        except Exception as e:
+            span.record_exception(e)
+            span.set_status(Status(StatusCode.ERROR))
+            raise

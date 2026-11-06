@@ -13,7 +13,7 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
 import {
   Brain, Target, Shield, DollarSign, FileCheck, ChevronRight, ChevronLeft,
-  CheckCircle, Bot, Loader2, HelpCircle,
+  CheckCircle, Bot, Loader2, HelpCircle, Zap, Edit3,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { evaluationsApi } from '../services/api';
@@ -124,9 +124,22 @@ const NewEvaluation: React.FC = () => {
   const isLastStep = currentStep === STEPS.length;
 
   return (
-    <div className="max-w-4xl mx-auto animate-fade-in">
+    <div className="max-w-4xl mx-auto animate-fade-in space-y-6">
+      {/* Mode Switcher Banner */}
+      <div className="flex items-center justify-between p-2 rounded-xl bg-bg-secondary border border-bg-border">
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-care-c/20 text-care-c border border-care-c/30 text-xs font-semibold">
+          <Edit3 size={14} /> Manual Evaluation Mode
+        </div>
+        <button
+          onClick={() => navigate('/automated-evaluation')}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-bg-hover text-slate-400 hover:text-slate-100 transition-colors text-xs font-medium"
+        >
+          <Zap size={14} className="text-amber-400" /> Switch to Automated Evaluation &rarr;
+        </button>
+      </div>
+
       {/* Step Progress Indicator */}
-      <div className="card-glass p-4 mb-6">
+      <div className="card-glass p-4">
         <div className="flex items-center justify-between">
           {STEPS.map((step, idx) => {
             const isCompleted = currentStep > step.id;

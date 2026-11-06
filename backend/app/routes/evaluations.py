@@ -16,8 +16,30 @@ from app.schemas.evaluation import (
 )
 from app.services.scoring import run_scoring
 from app.services.recommendations import generate_recommendations
+try:
+    from opentelemetry import trace
+    from opentelemetry.trace import Status, StatusCode
+    tracer = trace.get_tracer(__name__)
+except ImportError:
+    import contextlib
+    class DummySpan:
+        def set_attribute(self, *a, **kw): pass
+        def set_status(self, *a, **kw): pass
+        def record_exception(self, *a, **kw): pass
+        def add_event(self, *a, **kw): pass
+    class DummyTracer:
+        @contextlib.contextmanager
+        def start_as_current_span(self, name, *args, **kwargs):
+            yield DummySpan()
+    tracer = DummyTracer()
+    class Status:
+        def __init__(self, *a, **kw): pass
+    class StatusCode:
+        ERROR = "ERROR"
+        OK = "OK"
 
 router = APIRouter(prefix="/evaluations", tags=["Evaluations"])
+
 
 
 def _get_active_weights(db: Session) -> WeightConfigBase:
@@ -90,14 +112,44 @@ def _build_evaluation_from_create(data: EvaluationCreate, weights: WeightConfigB
 
 @router.post("/", response_model=EvaluationRead, status_code=status.HTTP_201_CREATED)
 def create_evaluation(data: EvaluationCreate, db: Session = Depends(get_db)):
-    """Create a new evaluation and compute CARE scores."""
-    weights = _get_active_weights(db)
-    fields = _build_evaluation_from_create(data, weights)
-    db_eval = Evaluation(**fields)
-    db.add(db_eval)
-    db.commit()
-    db.refresh(db_eval)
-    return db_eval
+
+    with tracer.start_as_current_span("create_evaluation") as span:
+
+        span.set_attribute("agent.name", data.agent_name)
+        span.set_attribute("agent.type", data.agent_type)
+
+        weights = _get_active_weights(db)
+
+        fields = _build_evaluation_from_create(data, weights)
+
+        db_eval = Evaluation(**fields)
+
+        with tracer.start_as_current_span("save_database") as db_span:
+         try:
+             db_span.add_event("Saving evaluation to database")
+
+             db.add(db_eval)
+             db.commit()
+             db.refresh(db_eval)
+
+             db_span.set_attribute("database.operation", "INSERT")
+             db_span.set_attribute("database.table", "evaluations")
+             db_span.set_attribute("evaluation.id", db_eval.id)
+             db_span.set_attribute("agent.name", db_eval.agent_name)
+             db_span.set_attribute("care.score", db_eval.care_score)
+
+             db_span.add_event("Database save successful")
+
+         except Exception as e:
+             db.rollback()
+             db_span.record_exception(e)
+             db_span.set_status(Status(StatusCode.ERROR))
+             raise
+
+        span.set_attribute("care.score", db_eval.care_score)
+        span.set_attribute("recommendation", db_eval.recommendation)
+
+        return db_eval
 
 
 @router.get("/", response_model=List[EvaluationSummary])

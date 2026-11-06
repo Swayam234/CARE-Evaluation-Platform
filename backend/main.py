@@ -1,44 +1,36 @@
 """
-CARE Evaluator – FastAPI Application Entry Point
-=================================================
-Starts the API server with CORS, route registration, auto DB creation,
-and optional sample data seeding on first startup.
+CARE Evaluator API Entry Point
 """
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.openapi.docs import get_swagger_ui_html
-from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
 
 from app.config.settings import settings
 from app.database.database import engine, Base, SessionLocal
-from app.models import evaluation  # noqa – ensures models are registered before create_all
+
+# Import models so SQLAlchemy registers tables (new pipeline models are in pipeline.py)
+from app.models import evaluation, pipeline  # noqa: F401
+
+# Import CARE Evaluator routes
 from app.routes import evaluations, comparison, analytics, config, utils, reports
 
+# Import Automated Evaluation Pipeline routes
+from app.routes import pipeline as pipeline_routes
+from app.routes import datasets as datasets_routes
+from app.routes import sample_agent as sample_agent_routes
 
-# ── Create all DB tables on startup ──────────────────────────────────────────
+# ── Create all DB tables ──────────────────────────────────────────────────────
 Base.metadata.create_all(bind=engine)
 
-# ── Auto-seed on first launch ─────────────────────────────────────────────────
-from app.utils.seed_data import seed_database
-with SessionLocal() as db:
-    seed_database(db)
-
-# ── FastAPI app ───────────────────────────────────────────────────────────────
+# ── FastAPI Application ───────────────────────────────────────────────────────
 app = FastAPI(
-    title="CARE Evaluator API",
+    title=settings.app_name,
     description="""
-## Enterprise Agentic AI Evaluation Platform
+## CARE Evaluation Framework
 
-The **CARE framework** evaluates AI agents across four dimensions:
-
-| Dimension | Weight | Description |
-|---|---|---|
-| 🧠 **C** – Computational Intelligence | 25% | Reasoning, planning, tool selection |
-| 🎯 **A** – Accuracy | 30% | Task success, precision, recall, hallucinations |
-| 🛡️ **R** – Reliability | 30% | Consistency, safety, compliance, latency |
-| 💰 **E** – Economics | 15% | Cost, ROI, throughput, productivity |
-
-**CARE Score = C×0.25 + A×0.30 + R×0.30 + E×0.15**
+**C**omputational Intelligence, **A**ccuracy, **R**eliability, **E**conomics — a comprehensive framework for scoring and comparing agentic AI systems.
     """,
     version=settings.app_version,
     docs_url="/docs",
@@ -46,7 +38,7 @@ The **CARE framework** evaluates AI agents across four dimensions:
     openapi_url="/openapi.json",
 )
 
-# ── CORS ─────────────────────────────────────────────────────────────────────
+# ── CORS ──────────────────────────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
@@ -55,7 +47,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Routers ───────────────────────────────────────────────────────────────────
+# ── Static Uploads Mount ──────────────────────────────────────────────────────
+uploads_dir = settings.upload_path
+if os.path.exists(uploads_dir):
+    app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
+
+# ── CARE Evaluation Routers (existing – unchanged) ───────────────────────────
 app.include_router(evaluations.router, prefix="/api")
 app.include_router(comparison.router, prefix="/api")
 app.include_router(analytics.router, prefix="/api")
@@ -63,8 +60,13 @@ app.include_router(config.router, prefix="/api")
 app.include_router(utils.router, prefix="/api")
 app.include_router(reports.router, prefix="/api")
 
+# ── Automated Evaluation Pipeline Routers (new) ───────────────────────────────
+app.include_router(pipeline_routes.router, prefix="/api")
+app.include_router(datasets_routes.router, prefix="/api")
+app.include_router(sample_agent_routes.router, prefix="/api")
 
-# ── Health check ─────────────────────────────────────────────────────────────
+
+# ── Health Check Endpoints ────────────────────────────────────────────────────
 @app.get("/health", tags=["System"])
 def health_check():
     return {
@@ -72,13 +74,24 @@ def health_check():
         "app": settings.app_name,
         "version": settings.app_version,
         "env": settings.app_env,
+        "ai_provider": settings.ai_provider,
     }
+
+
+@app.get("/health/db", tags=["System"])
+def db_health_check():
+    try:
+        with SessionLocal() as db:
+            db.execute(text("SELECT 1"))
+        return {"database": "connected", "status": "ok"}
+    except Exception as e:
+        return {"database": "error", "detail": str(e)}
 
 
 @app.get("/", tags=["System"])
 def root():
     return {
-        "message": f"Welcome to {settings.app_name} API",
+        "message": f"Welcome to {settings.app_name} API v{settings.app_version}",
         "docs": "/docs",
         "version": settings.app_version,
     }

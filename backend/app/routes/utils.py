@@ -1,7 +1,7 @@
 """
-Seed + Export Routes
-====================
-Database seeding and CSV export endpoints.
+Export Routes
+=============
+CSV export endpoints.
 """
 import csv
 import io
@@ -10,17 +10,10 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.database.database import get_db
-from app.utils.seed_data import seed_database
 from app.models.evaluation import Evaluation
 
 router = APIRouter(prefix="/utils", tags=["Utilities"])
 
-
-@router.post("/seed")
-def seed(db: Session = Depends(get_db)):
-    """Seed the database with sample evaluations. Safe to call multiple times."""
-    result = seed_database(db)
-    return {"message": "Seed complete", "result": result}
 
 
 @router.get("/export/csv")

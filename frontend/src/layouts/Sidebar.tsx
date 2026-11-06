@@ -16,7 +16,9 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { to: '/', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
-  { to: '/evaluate', icon: <PlusCircle size={20} />, label: 'New Evaluation' },
+  { to: '/evaluate', icon: <PlusCircle size={20} />, label: 'Manual Eval' },
+  { to: '/automated-evaluation', icon: <Zap size={20} />, label: 'Automated Eval' },
+  { to: '/evaluation-runs', icon: <BarChart3 size={20} />, label: 'Eval Runs' },
   { to: '/history', icon: <History size={20} />, label: 'History' },
   { to: '/comparison', icon: <GitCompare size={20} />, label: 'Comparison' },
   { to: '/analytics', icon: <BarChart3 size={20} />, label: 'Analytics' },

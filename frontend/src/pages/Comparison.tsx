@@ -79,7 +79,7 @@ const Comparison: React.FC = () => {
         const dimComp = result.dimension_comparisons.find(
           (d) => d.dimension.toLowerCase().startsWith(dimKey === 'c' ? 'comp' : dimKey === 'a' ? 'acc' : dimKey === 'r' ? 'rel' : 'eco')
         );
-        const row: Record<string, string | number> = { dimension: label };
+        const row: { dimension: string; [key: string]: string | number } = { dimension: label };
         result.agents.forEach((agent) => {
           row[agent.agent_name] = dimComp?.scores[agent.agent_name] ?? 0;
         });

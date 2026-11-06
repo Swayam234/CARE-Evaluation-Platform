@@ -12,6 +12,13 @@
   - [Dimension Breakdown & Weights](#dimension-breakdown--weights)
   - [CARE Score Formula & Normalization](#care-score-formula--normalization)
   - [Deployment Recommendation Tiers](#deployment-recommendation-tiers)
+- [⚡ Automated AI-Agent Evaluation Pipeline](#-automated-ai-agent-evaluation-pipeline)
+  - [Pipeline Architecture](#pipeline-architecture)
+  - [KPI Source Classification & Transparency](#kpi-source-classification--transparency)
+  - [Evaluator Abstraction Architecture](#evaluator-abstraction-architecture)
+  - [Ingesting Traces from Real Agents](#ingesting-traces-from-real-agents)
+  - [Simulation Adapter (Demo Mode)](#simulation-adapter-demo-mode)
+  - [Secret Protection & Telemetry Exporters](#secret-protection--telemetry-exporters)
 - [Key Features](#-key-features)
 - [System Architecture & Technology Stack](#-system-architecture--technology-stack)
 - [Project Directory Structure](#-project-directory-structure)
@@ -96,6 +103,216 @@ $$\text{CARE Score} = \frac{(C \times w_C) + (A \times w_A) + (R \times w_R) + (
 | **80.0 – 89.9** | 🔵 | **Pilot and Scale** | Ready for controlled user pilots and phased scaling. |
 | **70.0 – 79.9** | 🟡 | **Needs Improvement** | Requires prompt engineering, fine-tuning, or architectural adjustments before deployment. |
 | **< 70.0** | 🔴 | **Not Recommended** | Does not meet basic accuracy, safety, or economic thresholds. |
+
+---
+
+## ⚡ Automated AI-Agent Evaluation Pipeline
+
+The platform supports **dual-mode evaluation**:
+1. **Manual Evaluation**: Enter KPI measurements directly through a structured 6-step wizard.
+2. **Automated Evaluation**: Ingest execution traces from AI agents, compute raw KPIs automatically, and route measurements into the existing CARE scoring and recommendation engines.
+
+```
+                     Automated Evaluation Pipeline
+                     
+┌──────────────┐     OTel / HTTP Traces     ┌────────────────────────┐
+│   AI Agent   │ ─────────────────────────► │      Agent Traces      │
+│  Execution   │                            │      Tool Traces       │
+└──────────────┘                            └───────────┬────────────┘
+                                                        │
+                                                        ▼
+┌────────────────────────────────────────────────────────────────────┐
+│                       KPI Calculation Engine                       │
+│    app/services/kpi_calculator.py (Raw values ONLY · No scoring)    │
+└─────────────────────────────────┬──────────────────────────────────┘
+                                  │
+                                  ▼
+┌────────────────────────────────────────────────────────────────────┐
+│                     Configured Evaluators                          │
+│   • AccuracyEvaluator (Benchmark ground-truth test cases)          │
+│   • ToolEvaluator     (Expected vs actual tool calls)              │
+│   • SafetyEvaluator   (Architecture stub for safety guardrails)    │
+│   • LLMJudge          (Architecture stub for LLM-as-a-Judge)       │
+└─────────────────────────────────┬──────────────────────────────────┘
+                                  │
+                                  ▼
+┌────────────────────────────────────────────────────────────────────┐
+│                    KpiMeasurement Records                          │
+│   • Raw Value      • Unit       • Source       • Status            │
+│   (Calculated from telemetry / benchmark OR marked unavailable)    │
+└─────────────────────────────────┬──────────────────────────────────┘
+                                  │  Maps to EvaluationCreate
+                                  ▼
+┌────────────────────────────────────────────────────────────────────┐
+│                    Existing CARE Scoring Engine                    │
+│   app/services/scoring.py (run_scoring — Reused without changes)   │
+└─────────────────────────────────┬──────────────────────────────────┘
+                                  │
+                                  ▼
+┌────────────────────────────────────────────────────────────────────┐
+│                Existing Recommendation Engine                      │
+│   app/services/recommendations.py (generate_recommendations)       │
+└─────────────────────────────────┬──────────────────────────────────┘
+                                  │
+                                  ▼
+┌────────────────────────────────────────────────────────────────────┐
+│                     Evaluation Dashboard & Results                 │
+│   • Overall CARE Score (0-100)        • Dimension Breakdown        │
+│   • KPI Source Transparency Badges    • Coverage Indicator (%)     │
+│   • Diagnostic Action Items           • PDF / CSV Exports          │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+### Pipeline Architecture
+
+1. **Telemetry & Traces**: Captures task execution latency, status (`success` | `failed` | `error`), token usage (`input_tokens`, `output_tokens`, `total_tokens`), retry counts, and granular tool calls (`tool_name`, `latency_ms`, `status`).
+2. **KPI Calculation Engine** (`app/services/kpi_calculator.py`): Pure functions that compute **raw** KPI metrics from aggregated trace data. **It never normalizes or calculates CARE scores.**
+3. **Source Transparency & Never-Zero Rule**: If a KPI cannot be computed from available traces (e.g. reasoning quality requires an LLM judge), its status is recorded as `"unavailable"` and `raw_value = None`. **Unavailable metrics are never fabricated or treated as zero.**
+4. **Pipeline Orchestrator** (`app/services/pipeline_orchestrator.py`): Bridges the calculated KPIs to the **existing** scoring engine (`run_scoring()`) and recommendation engine (`generate_recommendations()`), ensuring zero duplicate scoring logic.
+5. **Asynchronous Execution**: Evaluation runs and KPI computations execute asynchronously via FastAPI `BackgroundTasks`. The frontend polls `GET /api/evaluation-runs/{id}/status` for non-blocking progress updates.
+
+---
+
+### KPI Source Classification & Transparency
+
+The table below shows the source and automation status for each of the **31 CARE KPIs**:
+
+| # | Dimension | KPI Name | Source | Automation Status | Why / Requirements |
+|:-:|:---:|:---|:---:|:---:|:---|
+| 1 | **R** | `latency_ms` | Telemetry | 🟢 **Automated** | Computed from trace duration (`sum(latency) / n_tasks`). |
+| 2 | **R** | `failure_rate` | Telemetry | 🟢 **Automated** | Computed from trace status (`failed_tasks / total * 100`). |
+| 3 | **R** | `retry_rate` | Telemetry | 🟢 **Automated** | Computed from `retry_count > 0` occurrences. |
+| 4 | **R** | `tool_success_rate` | Telemetry | 🟢 **Automated** | Computed from `ToolTrace` status records. |
+| 5 | **E** | `throughput` | Telemetry | 🟢 **Automated** | Computed from `completed_tasks / execution_hours`. |
+| 6 | **E** | `token_consumption` | Telemetry | 🟢 **Automated** | Average `total_tokens` per completed task trace. |
+| 7 | **E** | `cost_per_task` | Telemetry + Rates | 🟢 **Automated** | Derived from tokens + `LLM_INPUT/OUTPUT_COST_PER_1K_TOKENS`. |
+| 8 | **E** | `cost_per_successful_task` | Telemetry + Rates | 🟢 **Automated** | Derived from tokens of successful tasks only. |
+| 9 | **A** | `task_success_rate` | Benchmark | 🟢 **Phase 2** | Derived from `TestCaseResult` vs dataset `expected_output`. |
+| 10 | **A** | `goal_completion_rate` | Benchmark | 🟢 **Phase 2** | Derived from test case score thresholding ($\ge 0.7$). |
+| 11 | **C** | `tool_selection_accuracy` | Benchmark | 🟢 **Phase 2** | Evaluates `actual_tool` vs test case `expected_tool`. |
+| 12 | **C** | `relevance_score` | LLM Judge | 🟡 *Unavailable* | Requires LLM-as-a-Judge (`LLM_JUDGE_PROVIDER`). |
+| 13 | **C** | `reasoning_quality` | LLM Judge | 🟡 *Unavailable* | Requires LLM-as-a-Judge evaluation prompt. |
+| 14 | **C** | `completeness` | LLM Judge | 🟡 *Unavailable* | Requires LLM-as-a-Judge evaluation prompt. |
+| 15 | **C** | `planning_success_rate` | LLM Judge | 🟡 *Unavailable* | Requires multi-step plan trajectory evaluation. |
+| 16 | **C** | `task_decomposition_accuracy` | LLM Judge | 🟡 *Unavailable* | Requires subtask decomposition evaluation. |
+| 17 | **C** | `recommendation_acceptance_rate`| Business | 🟡 *Unavailable* | Requires human-in-the-loop reviewer logs. |
+| 18 | **A** | `precision` | Benchmark Ground Truth | 🟡 *Unavailable* | Requires labeled binary classification dataset. |
+| 19 | **A** | `recall` | Benchmark Ground Truth | 🟡 *Unavailable* | Requires labeled binary classification dataset. |
+| 20 | **A** | `hallucination_rate` | LLM Judge | 🟡 *Unavailable* | Requires hallucination detection or judge model. |
+| 21 | **R** | `consistency_score` | Evaluator | 🟡 *Unavailable* | Requires repeated runs across identical prompts. |
+| 22 | **R** | `error_recovery_rate` | Business / Workflow | 🟡 *Unavailable* | Requires multi-turn recovery trajectory data. |
+| 23 | **R** | `safety_violation_rate` | Safety Guardrail | 🟡 *Unavailable* | Requires safety service (Llama Guard / Azure Safety). |
+| 24 | **R** | `policy_compliance_score` | Policy Evaluator | 🟡 *Unavailable* | Requires organizational policy compliance checker. |
+| 25 | **R** | `audit_coverage` | Infrastructure | 🟡 *Unavailable* | Requires audit log coverage verification. |
+| 26 | **R** | `pii_leakage_rate` | PII Detector | 🟡 *Unavailable* | Requires PII scanner (Presidio / AWS Comprehend). |
+| 27 | **E** | `resource_utilization` | Infrastructure | 🟡 *Unavailable* | Requires CPU/GPU infrastructure metrics. |
+| 28 | **E** | `human_effort_saved` | Business Data | 🟡 *Unavailable* | Requires baseline human time vs agent execution. |
+| 29 | **E** | `productivity_improvement` | Business Data | 🟡 *Unavailable* | Requires business productivity measurement. |
+| 30 | **E** | `business_roi` | Business Data | 🟡 *Unavailable* | Requires total financial cost and value attribution. |
+| 31 | **E** | `payback_period_months` | Business Data | 🟡 *Unavailable* | Requires capital investment amortization data. |
+
+> [!IMPORTANT]
+> **Why Telemetry Alone Cannot Calculate All 31 KPIs**:
+> Telemetry (spans, tokens, latency, status codes) accurately captures **operational performance** (e.g. latency, failure rates, tool call health, token consumption). However, evaluating semantic correctness (reasoning quality, hallucination rate) requires an **LLM Judge**, benchmark correctness requires **ground-truth datasets**, and business impact (ROI, human effort saved) requires **enterprise business data**. The CARE platform explicitly tracks and displays the origin of every metric.
+
+---
+
+### Evaluator Abstraction Architecture
+
+All non-telemetry evaluators inherit from `BaseEvaluator` (`app/services/evaluators/base_evaluator.py`):
+
+```python
+class BaseEvaluator(ABC):
+    @property
+    @abstractmethod
+    def name(self) -> str: ...
+
+    @abstractmethod
+    def evaluate(self, run, traces, tool_traces, test_case_results) -> List[RawKpiResult]: ...
+
+    def is_available(self) -> bool: ...
+```
+
+- `AccuracyEvaluator` (`accuracy_evaluator.py`): Active. Computes `task_success_rate` and `goal_completion_rate` from benchmark results.
+- `ToolEvaluator` (`tool_evaluator.py`): Active. Computes `tool_selection_accuracy` from expected vs actual tool calls.
+- `SafetyEvaluator` (`safety_evaluator.py`): Documented architecture stub. Returns `unavailable` status until a guardrail provider is configured.
+- `LlmJudge` (`llm_judge.py`): Documented architecture stub. Activates when `LLM_JUDGE_PROVIDER` is set (`openai` | `gemini` | `anthropic`).
+
+---
+
+### Ingesting Traces from Real Agents
+
+Real AI agents stream their execution traces directly to the platform via REST endpoints:
+
+```bash
+# 1. Create an Evaluation Run
+POST /api/evaluation-runs/
+{
+  "agent_name": "Production Customer Support Agent",
+  "agent_type": "Customer Support",
+  "total_tasks": 100,
+  "llm_input_cost_per_1k": 0.0005,
+  "llm_output_cost_per_1k": 0.0015
+}
+# Returns { "id": 42, "status": "PENDING" }
+
+# 2. Ingest Agent Execution Traces (Bulk)
+POST /api/evaluation-runs/42/traces
+{
+  "traces": [
+    {
+      "trace_id": "otel-span-001",
+      "task_id": "task-user-1234",
+      "model_name": "gpt-4o",
+      "latency_ms": 642.5,
+      "status": "success",
+      "input_tokens": 520,
+      "output_tokens": 210,
+      "total_tokens": 730,
+      "retry_count": 0
+    }
+  ]
+}
+
+# 3. Ingest Tool Call Traces
+POST /api/evaluation-runs/42/tool-traces
+{
+  "agent_trace_id": 101,
+  "tool_traces": [
+    {
+      "tool_name": "query_database",
+      "latency_ms": 85.0,
+      "status": "success"
+    }
+  ]
+}
+
+# 4. Generate CARE Score & Evaluation
+POST /api/evaluation-runs/42/generate-evaluation
+# Returns { "run_id": 42, "poll_url": "/api/evaluation-runs/42/status" }
+```
+
+---
+
+### Simulation Adapter (Demo Mode)
+
+For demonstration, development, and testing purposes without an external agent, the platform includes a **Simulation Adapter** (`app/routes/sample_agent.py`):
+
+- **Adapter, Not Truth**: Generates synthetic traces using configurable parameters (task count, success rate, latency distribution, tool call frequency).
+- **Explicit Labeling**: All generated traces carry `raw_metadata.simulation = True` and descriptions are prefixed with `[SIMULATION]`.
+- **Identical Pipeline**: Executes the exact same pipeline orchestrator and scoring engine that real agent runs use.
+- Accessible via the **Automated Evaluation** tab in the UI or `POST /api/simulation/run`.
+
+---
+
+### Secret Protection & Telemetry Exporters
+
+- **Secret Protection**: All API keys and credentials are read exclusively from environment variables (`.env`). `.env` is listed in `.gitignore` and must never be committed.
+- **Arize Telemetry**: Existing Arize Phoenix credentials (`ARIZE_SPACE_ID`, `ARIZE_API_KEY`, `ARIZE_PROJECT_NAME`) are preserved.
+- **Configurable Exporter (`OTEL_EXPORTER_TYPE`)**:
+  - `arize`: Export traces to Arize Phoenix (default).
+  - `console`: Print spans to stdout for local debugging.
+  - `otlp`: Export via gRPC to any OpenTelemetry collector (e.g. Jaeger, Grafana Tempo) via `OTEL_EXPORTER_OTLP_ENDPOINT`.
 
 ---
 

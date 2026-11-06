@@ -7,6 +7,8 @@ import History from './pages/History';
 import Comparison from './pages/Comparison';
 import Analytics from './pages/Analytics';
 import Settings from './pages/Settings';
+import AutomatedEvaluation from './pages/AutomatedEvaluation';
+import EvaluationRuns from './pages/EvaluationRuns';
 
 function App() {
   return (
@@ -16,6 +18,8 @@ function App() {
           <Route index element={<Dashboard />} />
           <Route path="evaluate" element={<NewEvaluation />} />
           <Route path="evaluate/:id" element={<NewEvaluation />} />
+          <Route path="automated-evaluation" element={<AutomatedEvaluation />} />
+          <Route path="evaluation-runs" element={<EvaluationRuns />} />
           <Route path="results/:id" element={<EvaluationResults />} />
           <Route path="history" element={<History />} />
           <Route path="comparison" element={<Comparison />} />
